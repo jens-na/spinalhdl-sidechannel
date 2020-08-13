@@ -35,20 +35,22 @@ object HideMethods {
    * @param start the start value of the counter
    * @param end the end value of the counter
    */
-  case class HidingCounter(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
+  case class HidingCounter(override val start: BigInt, override val end: BigInt, mode: Int) extends Counter(start, end) {
     val willResetShuffle = False
     val willShuffle = False
-    val ready = Reg(Bool()) init(False)
     val width = log2Up(end - start + 1)
     val currNum = Reg(UInt(width bits)) init(start)
-    val currShufflePop = Reg(UInt(width bits)) init(start)
+    val currShufflePop = Counter(end - start + 1)
+    val ready = Reg(Bool()) init(False)
+    val valueNextInternal = UInt(log2Up(end + 1) bits)
 
     // Allow statement overlapping due to software overriding the Counter
     val overrides = List[Data](value, valueNext, willOverflowIfInc, willOverflow, willIncrement)
     overrides.foreach(x => x.allowOverride)
 
     val numbers = Vec(Reg(UInt(width bits)), (end + 1).toInt)
-    ((start to end), numbers).zipped.foreach((x,y) => y init(x)) // reset of regs: numbers(0) = 0, numbers(1) = 1, etc.
+    ((start to end), numbers).zipped.foreach((x,y) => y init(x))
+    // reset of regs: numbers(0) = 0, numbers(1) = 1, etc.
     //val mem = Mem(UInt(log2Up(end + 1) bit), end + 1) init((start to end).toSeq.map(x => U(x)))
 
     /**
@@ -71,7 +73,33 @@ object HideMethods {
         numbers(rndShift.asUInt) := numbers(currNum)
         numbers(currNum) := tmp
         currNum := currNum + 1
-        ready := currNum === end
+        ready := currNum === (end - 1)
+
+        // Feed to current value. When the last rnd eq 0 the value which get shuffled gets directly set as the next
+        // value. Otherwise the first number of the number pool gets forwarded.
+        when(currNum === (end - 1)) {
+          when(rndShift.asUInt === 0) {
+            valueNext := numbers(currNum)
+          }.otherwise {
+            valueNext := numbers(0)
+          }
+        }.otherwise {
+          valueNext := 0
+        }
+      }
+    }
+
+    val Increment = new Area {
+      willOverflowIfInc := currShufflePop === end
+      when(willOverflow) {
+        currShufflePop := start
+      }
+      when(ready) {
+        valueNext := numbers(currShufflePop.value + 1) // Start at 1, the value 0 gets set in the Shuffle area
+      }
+      when(willClear) {
+        ready := False
+        currShufflePop := start
       }
     }
 
@@ -81,34 +109,14 @@ object HideMethods {
 
     override def increment(): Unit = {
       when(ready){
-        currShufflePop := currShufflePop + 1
+        currShufflePop.increment()
         willIncrement := True
       }
     }
-    willOverflowIfInc := currShufflePop === end
-    when(willOverflow) {
-      currShufflePop := start
-    }
-//    } otherwise {
-//      valueNext := numbers(currShufflePop)
-//    }
-    valueNext := numbers(currShufflePop)
-
-    when(willClear) {
-      ready := False
-      currShufflePop := start
-    }
-
 
     def withSeed(seed : Bits): Unit = {
       Shuffle.seed := seed
     }
-    /**
-     * Additional pre pop tasks for the hiding counter
-     */
-    def build(): Unit = {
-    }
-    Component.current.addPrePopTask({ () => build() })
   }
 
   implicit class HidingCounterExtension[T <: Counter](val c: T) {
@@ -117,21 +125,28 @@ object HideMethods {
      * Puts the Counter in the arbitrary order state
      * @return
      */
-    def arbitraryOrder(): Counter = {
+    def arbitraryOrder(enabled: Boolean = true): Counter = {
+      if(!enabled) return c
       require(isPow2(c.end - c.start + 1), "Hiding extension counter must be a power of 2. Requirement: isPow2(end - start)")
-      HidingCounter(c.start, c.end)
+      HidingCounter(c.start, c.end, 1)
     }
 
+    /**
+     * Sets the seed of the hiding counter. If the counter is no hiding counter, nothing happens.
+     *
+     * @param seed
+     * @return
+     */
     def withSeed(seed : Bits): Counter = {
-      val hc = c.asInstanceOf[HidingCounter]
-      hc.withSeed(seed)
-      hc
+      try {
+        val hc = c.asInstanceOf[HidingCounter]
+        hc.withSeed(seed)
+        hc
+      }
+      catch {
+        case e: ClassCastException => c
+      }
     }
   }
 
-  implicit class HidingCounterExtensionInt[T <: HidingCounter](val c: T) {
-    def withSeed(seed : Bits): HidingCounter = {
-      c
-    }
-  }
 }

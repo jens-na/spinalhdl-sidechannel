@@ -37,33 +37,26 @@ object TestHiding {
    * @param start Count from
    * @param end Count to
    */
-  class HidingExample(start: Int, end: Int, seed: BigInt) extends Component {
+  class HidingExample(start: Int, end: Int, seed: BigInt, hiding: Boolean = true) extends Component {
     val io = new Bundle {
-      val valCounter = out UInt(log2Up(end + 1) bits)
+      val valCounterN = out UInt(log2Up(end + 1) bits)
       val valCounterH = out UInt(log2Up(end + 1) bits)
     }
 
-    val counter = Counter(16) arbitraryOrder() withSeed(seed)
-    
+    val counterHiding = Counter(16) arbitraryOrder() withSeed(seed)
+    val counterNormal = Counter(16)
 
-    val counterH = Counter(16)
-    counter.increment()
-    counterH.increment()
+    counterHiding.increment()
 
-    when(counter.willOverflow) {
-      counter.clear()
+    when(counterHiding.willIncrement) {
+      counterNormal.increment()
     }
-    when(counterH.willOverflow) {
-      counterH.clear()
-    }
-
-    io.valCounter := counter.value
-    io.valCounterH := counterH.value
+    io.valCounterN := counterNormal.value
+    io.valCounterH := counterHiding.value
   }
 
   def main(args: Array[String]): Unit = {
-
-    val seed = BigInt("000000100000001000000010", 2)
+    val seed = BigInt("110111100000011100000011", 2)
     SimConfig.withWave.compile(new HidingExample(1,8, seed)).doSim{ dut =>
       dut.clockDomain.forkStimulus(10)
 
@@ -73,13 +66,14 @@ object TestHiding {
       for(j <- 0 until 100) {
         dut.clockDomain.waitRisingEdge()
 
-        counterList += dut.io.valCounter.toBigInt.toString(16)
+        counterList += dut.io.valCounterN.toBigInt.toString(16)
         counterHList += dut.io.valCounterH.toBigInt.toString(16)
       }
 
       counterList.foreach(x => print(s"${x} "))
       println("")
       counterHList.foreach(x => print(s"${x} "))
+      println("")
     }
   }
 }

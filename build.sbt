@@ -1,4 +1,5 @@
 name := "spinalhdl-sidechannel"
+organization := "com.github.spinalhdl"
 version := "0.1"
 scalaVersion := "2.11.12"
 
