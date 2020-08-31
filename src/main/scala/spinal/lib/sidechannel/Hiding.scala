@@ -22,12 +22,51 @@
  */
 package spinal.lib.sidechannel
 
-import spinal.core._
+import spinal.core.{Bits, _}
 import spinal.lib._
-import spinal.lib.asg.GaloisLFSRConfig
-import sun.java2d.loops.XorFillSpansANY
+import spinal.core.sim._
+
+import scala.collection.mutable.ListBuffer
 
 object HideMethods {
+
+  /**
+   * Hiding counter with double buffer functionality. The buffer includes two sub counters which change when the other
+   * counter overflows. While the other counter is active the other one gets the next random numbers from the PRNG.
+   * @param start
+   * @param end
+   */
+  case class HidingCounterDoubleBuffer(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
+    val c1 = HidingCounter(start, end) // active when bufferToggle == false
+    val c2 = HidingCounter(start, end) // active when bufferToggle == true
+    val bufferToggle = Reg(Bool) init(False)
+
+    val overrides = List[Data](valueNext, willOverflowIfInc, willOverflow, willIncrement, willClear)
+    overrides.foreach(x => x.allowOverride)
+
+    valueNext := Mux(bufferToggle, c2.valueNext, c1.valueNext)
+    willIncrement := Mux(bufferToggle, c2.willIncrement, c1.willIncrement)
+    willOverflowIfInc := Mux(bufferToggle, c2.willOverflowIfInc, c1.willOverflowIfInc)
+    willClear := Mux(bufferToggle, c2.willClear, c1.willClear)
+
+    // Toggle the buffer
+    when(c1.willOverflowIfInc || c2.willOverflowIfInc) { bufferToggle := !bufferToggle}
+
+    override def clear(): Unit = {
+      when(bufferToggle) {c2.clear()}
+      when(!bufferToggle) {c1.clear()}
+    }
+
+    override def increment(): Unit = {
+      when(bufferToggle) {c2.increment()}
+      when(!bufferToggle) {c1.increment()}
+    }
+
+    def setSeed(seed : Seq[Bits]): Unit = {
+      c1.Shuffle.seed := seed(0)
+      c2.Shuffle.seed := seed(1)
+    }
+  }
 
   /**
    * The hiding counter which comes with a random shuffle for the values start..end
@@ -35,23 +74,17 @@ object HideMethods {
    * @param start the start value of the counter
    * @param end the end value of the counter
    */
-  case class HidingCounter(override val start: BigInt, override val end: BigInt, mode: Int) extends Counter(start, end) {
-    val willResetShuffle = False
-    val willShuffle = False
+  case class HidingCounter(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
+    val ready = Reg(Bool()) init(False) simPublic()
     val width = log2Up(end - start + 1)
-    val currNum = Reg(UInt(width bits)) init(start)
-    val currShufflePop = Counter(end - start + 1)
-    val ready = Reg(Bool()) init(False)
-    val valueNextInternal = UInt(log2Up(end + 1) bits)
-
-    // Allow statement overlapping due to software overriding the Counter
-    val overrides = List[Data](value, valueNext, willOverflowIfInc, willOverflow, willIncrement)
-    overrides.foreach(x => x.allowOverride)
+    val currShuffleInit = Reg(UInt(width bits)) init(start)
+    val currShufflePop = Reg(UInt(width bits)) init(start)
 
     val numbers = Vec(Reg(UInt(width bits)), (end + 1).toInt)
     ((start to end), numbers).zipped.foreach((x,y) => y init(x))
-    // reset of regs: numbers(0) = 0, numbers(1) = 1, etc.
-    //val mem = Mem(UInt(log2Up(end + 1) bit), end + 1) init((start to end).toSeq.map(x => U(x)))
+
+    val overrides = List[Data](valueNext, willOverflowIfInc)
+    overrides.foreach(x => x.allowOverride)
 
     /**
      * Shuffle implementation
@@ -68,54 +101,43 @@ object HideMethods {
       rndShift := rnd >> (64 - width)
       rnd := prng.io.rngout
 
+      // Swap
       val tmp = numbers(rndShift.asUInt)
       when(!ready) {
-        numbers(rndShift.asUInt) := numbers(currNum)
-        numbers(currNum) := tmp
-        currNum := currNum + 1
-        ready := currNum === (end - 1)
+        numbers(rndShift.asUInt) := numbers(currShuffleInit)
+        numbers(currShuffleInit) := tmp
+        currShuffleInit := currShuffleInit + 1
 
-        // Feed to current value. When the last rnd eq 0 the value which get shuffled gets directly set as the next
-        // value. Otherwise the first number of the number pool gets forwarded.
-        when(currNum === (end - 1)) {
-          when(rndShift.asUInt === 0) {
-            valueNext := numbers(currNum)
-          }.otherwise {
-            valueNext := numbers(0)
-          }
-        }.otherwise {
-          valueNext := 0
+        when(currShuffleInit === end - 1) {
+          ready := True
         }
       }
     }
 
-    val Increment = new Area {
-      willOverflowIfInc := currShufflePop === end
-      when(willOverflow) {
-        currShufflePop := start
-      }
-      when(ready) {
-        valueNext := numbers(currShufflePop.value + 1) // Start at 1, the value 0 gets set in the Shuffle area
-      }
-      when(willClear) {
-        ready := False
-        currShufflePop := start
-      }
+    // Increment + direct forward iff the last random would change numbers(0)
+    when(currShuffleInit === (end-1) && Shuffle.rndShift.asUInt === 0) {
+      valueNext := numbers(currShuffleInit)
+    }.otherwise {
+      valueNext := Mux(willIncrement, numbers(currShufflePop + 1), numbers(0))
     }
 
-    override def clear(): Unit = {
-      willClear := True
+    willOverflowIfInc := currShufflePop === end
+
+    when(willClear) {
+      ready := False
+      currShuffleInit := start
+      currShufflePop := start
     }
 
     override def increment(): Unit = {
       when(ready){
-        currShufflePop.increment()
+        currShufflePop := currShufflePop + 1
         willIncrement := True
       }
     }
 
-    def withSeed(seed : Bits): Unit = {
-      Shuffle.seed := seed
+    def setSeed(seed : Seq[Bits]): Unit = {
+      Shuffle.seed := seed(0)
     }
   }
 
@@ -123,12 +145,24 @@ object HideMethods {
 
     /**
      * Puts the Counter in the arbitrary order state
-     * @return
+     * @param enabled enable toggle, true default
+     * @return the HidingCounter implementation
      */
     def arbitraryOrder(enabled: Boolean = true): Counter = {
       if(!enabled) return c
       require(isPow2(c.end - c.start + 1), "Hiding extension counter must be a power of 2. Requirement: isPow2(end - start)")
-      HidingCounter(c.start, c.end, 1)
+      HidingCounter(c.start, c.end)
+    }
+
+    /**
+     * Puts the Counter in the arbitrary order state with double buffer functionality
+     * @param enabled enable toggle, true default
+     * @return the HidingCounter implementation
+     */
+    def arbitraryOrderDoubleBuffer(enabled: Boolean = true): Counter = {
+      if(!enabled) return c
+      require(isPow2(c.end - c.start + 1), "Hiding extension counter must be a power of 2. Requirement: isPow2(end - start)")
+      HidingCounterDoubleBuffer(c.start, c.end)
     }
 
     /**
@@ -137,15 +171,22 @@ object HideMethods {
      * @param seed
      * @return
      */
-    def withSeed(seed : Bits): Counter = {
+    def withSeed(seed : Bits*): Counter = {
       try {
-        val hc = c.asInstanceOf[HidingCounter]
-        hc.withSeed(seed)
-        hc
-      }
-      catch {
+        if (c.isInstanceOf[HidingCounter]) {
+          val hc = c.asInstanceOf[HidingCounter]
+          hc.setSeed(seed)
+          hc
+        }
+        if(c.isInstanceOf[HidingCounterDoubleBuffer]) {
+          val hc = c.asInstanceOf[HidingCounterDoubleBuffer]
+          hc.setSeed(seed)
+          hc
+        }
+      } catch {
         case e: ClassCastException => c
       }
+      c
     }
   }
 

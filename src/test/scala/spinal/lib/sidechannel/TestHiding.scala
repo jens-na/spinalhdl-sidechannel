@@ -22,58 +22,152 @@
  */
 package spinal.lib.sidechannel
 
-import spinal.core._
+import spinal.core.{assert, _}
 import spinal.core.sim._
 import spinal.lib._
 import spinal.lib.sidechannel.HideMethods._
+import org.scalatest.FunSuite
 
 import scala.collection.mutable.ListBuffer
 
 
-object TestHiding {
+/**
+ * Example Test componenent to test the PseudoRandom object
+ */
 
-  /**
-   * Example Test componenent to test the PseudoRandom object
-   * @param start Count from
-   * @param end Count to
-   */
-  class HidingExample(start: Int, end: Int, seed: BigInt, hiding: Boolean = true) extends Component {
-    val io = new Bundle {
-      val valCounterN = out UInt(log2Up(end + 1) bits)
-      val valCounterH = out UInt(log2Up(end + 1) bits)
-    }
+case class HidingTestSuite() extends FunSuite {
 
-    val counterHiding = Counter(16) arbitraryOrder() withSeed(seed)
-    val counterNormal = Counter(16)
+  test("HidingCounter_16_Single") {
 
-    counterHiding.increment()
-
-    when(counterHiding.willIncrement) {
-      counterNormal.increment()
-    }
-    io.valCounterN := counterNormal.value
-    io.valCounterH := counterHiding.value
-  }
-
-  def main(args: Array[String]): Unit = {
-    val seed = BigInt("110111100000011100000011", 2)
-    SimConfig.withWave.compile(new HidingExample(1,8, seed)).doSim{ dut =>
-      dut.clockDomain.forkStimulus(10)
-
-      var counterList = ListBuffer[String]()
-      var counterHList = ListBuffer[String]()
-
-      for(j <- 0 until 100) {
-        dut.clockDomain.waitRisingEdge()
-
-        counterList += dut.io.valCounterN.toBigInt.toString(16)
-        counterHList += dut.io.valCounterH.toBigInt.toString(16)
+    // Example Component
+    class HidingCounter_16_Single(counterLength: Int) extends Component {
+      val io = new Bundle {
+        val value = out UInt (log2Up(counterLength) bits)
+        val seed = in Bits (64 bits)
       }
 
-      counterList.foreach(x => print(s"${x} "))
-      println("")
-      counterHList.foreach(x => print(s"${x} "))
-      println("")
+      val counter = Counter(counterLength) arbitraryOrder()
+      counter.asInstanceOf[HidingCounter].Shuffle.seed := io.seed // Set a seed from a TRNG for example
+
+      when(counter.willOverflow) {
+        counter.clear()
+      }
+
+      counter.increment()
+      io.value := counter.value
+    }
+
+    // Variables
+    val seed = BigInt("110111100000011100000011", 2)
+    val counterLength = 16
+    val expected = (0 to counterLength - 1).map(x => BigInt(x)).toList
+    var actual = ListBuffer[BigInt]()
+
+    // Simulation
+    SimConfig.withWave.compile(new HidingCounter_16_Single(16)).doSim { dut =>
+      dut.clockDomain.forkStimulus(10)
+      dut.clockDomain.waitRisingEdge()
+
+      dut.io.seed #= seed // Static seed for testing
+      val counterImpl = dut.counter.asInstanceOf[HidingCounter]
+
+      // Wait until seeded
+      waitUntil(counterImpl.ready.toBoolean == true)
+      dut.clockDomain.waitRisingEdge()
+
+      // Check the counterLength values
+      for (j <- 0 until counterLength) {
+        println(s"value=${dut.io.value.toBigInt.toString(16)}, ready=${counterImpl.ready.toBoolean}")
+        actual += dut.io.value.toBigInt
+        dut.clockDomain.waitRisingEdge()
+      }
+
+      // Assert
+      spinal.core.assert(actual.length == counterLength,
+        s"Counter length incorrect. Must be '${counterLength.toString}', but is '${actual.length}''")
+
+      for (n <- expected) {
+        spinal.core.assert(actual.contains(n), s"Value '${n.toString(16)}' not in the actual values list: [${actual.toString()}]")
+      }
+    }
+  }
+
+  test("HidingCounter_16_Double") {
+
+    // Example Component
+    class HidingCounter_16_Double(counterLength: Int) extends Component {
+      val io = new Bundle {
+        val value = out UInt (log2Up(counterLength) bits)
+        val seed1 = in Bits (64 bits)
+        val seed2 = in Bits (64 bits)
+      }
+
+      val counter = Counter(counterLength) arbitraryOrderDoubleBuffer()
+      counter.asInstanceOf[HidingCounterDoubleBuffer].c1.Shuffle.seed := io.seed1 // Set a seed from a TRNG for example
+      counter.asInstanceOf[HidingCounterDoubleBuffer].c2.Shuffle.seed := io.seed2
+
+      when(counter.willOverflow) {
+        counter.clear()
+      }
+
+      counter.increment()
+      io.value := counter.value
+    }
+
+    // Variables
+    val seed1 = BigInt("110111100000011100000011", 2)
+    val seed2 = BigInt("11000110111001110000001", 2)
+    val counterLength = 16
+    val expected = (0 to counterLength - 1).map(x => BigInt(x)).toList
+    var actual = ListBuffer[BigInt]()
+
+    // Simulation
+    SimConfig.withWave.compile(new HidingCounter_16_Double(16)).doSim { dut =>
+      dut.clockDomain.forkStimulus(10)
+      dut.clockDomain.waitRisingEdge()
+
+      dut.io.seed1 #= seed1 // Static seed for testing
+      dut.io.seed2 #= seed1 // Static seed for testing
+      val counterImpl = dut.counter.asInstanceOf[HidingCounterDoubleBuffer]
+
+      // Wait until seeded
+      waitUntil(counterImpl.c1.ready.toBoolean == true)
+      dut.clockDomain.waitRisingEdge()
+
+      // Check the counterLength values
+      for (j <- 0 until counterLength) {
+        println(s"counter=c1, value=${dut.io.value.toBigInt.toString(16)}, ready=${counterImpl.c1.ready.toBoolean}")
+        actual += dut.io.value.toBigInt
+        dut.clockDomain.waitRisingEdge()
+      }
+
+      // Assert
+      spinal.core.assert(actual.length == counterLength,
+        s"Counter length incorrect. Must be '${counterLength.toString}', but is '${actual.length}''")
+
+      for (n <- expected) {
+        spinal.core.assert(actual.contains(n), s"Value '${n.toString(16)}' not in the actual values list: [${actual.toString()}]")
+      }
+
+      // Wait until seeded
+      waitUntil(counterImpl.c2.ready.toBoolean == true)
+      actual.clear()
+      dut.clockDomain.waitRisingEdge()
+
+      // Check the counterLength values
+      for (j <- 0 until counterLength) {
+        println(s"counter=c2, value=${dut.io.value.toBigInt.toString(16)}, ready=${counterImpl.c2.ready.toBoolean}")
+        actual += dut.io.value.toBigInt
+        dut.clockDomain.waitRisingEdge()
+      }
+
+      // Assert
+      spinal.core.assert(actual.length == counterLength,
+        s"Counter length incorrect. Must be '${counterLength.toString}', but is '${actual.length}''")
+
+      for (n <- expected) {
+        spinal.core.assert(actual.contains(n), s"Value '${n.toString(16)}' not in the actual values list: [${actual.toString()}]")
+      }
     }
   }
 }

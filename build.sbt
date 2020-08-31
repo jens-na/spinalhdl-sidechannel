@@ -9,6 +9,7 @@ libraryDependencies ++= Seq(
   "com.github.spinalhdl" % "spinalhdl-core_2.11" % "1.4.0",
   "com.github.spinalhdl" % "spinalhdl-lib_2.11" % "1.4.0",
   "com.github.spinalhdl" % "spinalhdl-asg_2.11" % "0.1",
+  "org.scalatest" % "scalatest_2.11" % "2.2.1",
   compilerPlugin("com.github.spinalhdl" % "spinalhdl-idsl-plugin_2.11" % "1.4.0")
 )
 
