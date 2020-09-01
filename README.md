@@ -42,6 +42,7 @@ The function `arbitraryOrder() ` activates the extension and overrides some core
 - `Counter.willClear` signal is set when the function `clear()` is called and causes the counter to create a new permutation of the values. This process takes N-1 cycles, where N is the maximum counter value.
 
 Counter with double buffering:
+
 For a lot of use cases it is neccessary to count from the start value to the end value. If the counter overflows the counter gets cleared and reset to the start value and the process repeats. Since the counter extension must draw new random numbers to create a new permutation, the `clear()` function adds N-1 cycles of delay per counter overflow to the circuit. To make the delay as little as possible a double buffer functionality is implemented:
 
 ```
