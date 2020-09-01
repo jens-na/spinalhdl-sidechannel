@@ -60,8 +60,8 @@ The AES implementation in the SpinalCrypto library uses a `Counter(16)` in the S
     <td>Default Counter</td>
     <td>Arbitrary Order Execution</td>
   <tr>
-    <td>![counter_default][1]</td>
-    <td>![counter_arbitrary_order][2]</td>
+    <td><img alt="counter default" src="https://i.imgur.com/JT4qFTu.png"></img></td>
+    <td><img alt="counter arbitrary order" src="https://i.imgur.com/1k83nwH.png"></img></td>
   </tr>
 </table>
 
