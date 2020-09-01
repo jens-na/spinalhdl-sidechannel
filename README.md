@@ -46,7 +46,7 @@ Counter with double buffering:
 For a lot of use cases it is neccessary to count from the start value to the end value. If the counter overflows the counter gets cleared and reset to the start value and the process repeats. Since the counter extension must draw new random numbers to create a new permutation, the `clear()` function adds N-1 cycles of delay per counter overflow to the circuit. To make the delay as little as possible a double buffer functionality is implemented:
 
 ```
-val cy = Counter(16) arbitraryOrder() doubleBuffer()
+val cy = Counter(16) arbitraryOrderDoubleBuffer()
 
 // Needs two seeds for two internal counters
 cy.asInstanceOf[HidingCounterDoubleBuffer].c1.Shuffle.seed := ... // io.seed1 for example
@@ -55,7 +55,7 @@ cy.asInstanceOf[HidingCounterDoubleBuffer].c2.Shuffle.seed := ... // io.seed2 fo
 The double buffer holds two internal counters which alternate when the a counter overflows. The not active counter creates a new permutation while the other counter is in use.
 
 ### Examples
-The AES implementation in the SpinalCrypto library uses a `Counter(16)` in the SubBytes step. In this step each byte a_{i,j} in the state array gets replaced by S(a_{i,j}) with a S-Box substitution. These S-Box lookups are independet of each other and may be executed in an arbitrary order with optional double buffering.
+The AES implementation in the SpinalCrypto library uses a `Counter(16)` in the SubBytes step. In this step each byte <img src="https://render.githubusercontent.com/render/math?math=a_{i,j}"> in the state array gets replaced by <img src="https://render.githubusercontent.com/render/math?math=S(a_{i,j})"> with a S-Box substitution. These S-Box lookups are independet of each other and may be executed in an arbitrary order with optional double buffering.
 <table style="padding:10px">
   <tr>
     <td>Default Counter</td>
