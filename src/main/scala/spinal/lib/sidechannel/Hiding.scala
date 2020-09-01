@@ -108,19 +108,18 @@ object HideMethods {
         numbers(currShuffleInit) := tmp
         currShuffleInit := currShuffleInit + 1
 
-        when(currShuffleInit === end - 1) {
+        when(currShuffleInit === (end - 1)) {
           ready := True
         }
       }
     }
 
     // Increment + direct forward iff the last random would change numbers(0)
-    when(currShuffleInit === (end-1) && Shuffle.rndShift.asUInt === 0) {
+    when(currShuffleInit === (end - 1) && Shuffle.rndShift.asUInt === 0) {
       valueNext := numbers(currShuffleInit)
     }.otherwise {
       valueNext := Mux(willIncrement, numbers(currShufflePop + 1), numbers(0))
     }
-
     willOverflowIfInc := currShufflePop === end
 
     when(willClear) {
