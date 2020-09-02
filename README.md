@@ -58,8 +58,9 @@ The double buffer holds two internal counters which alternate when the a counter
 The AES implementation in the SpinalCrypto library uses a `Counter(16)` in the SubBytes step. In this step each byte <img src="https://render.githubusercontent.com/render/math?math=a_{i,j}"> in the state array gets replaced by <img src="https://render.githubusercontent.com/render/math?math=S(a_{i,j})"> with a S-Box substitution. These S-Box lookups are independet of each other and may be executed in an arbitrary order with optional double buffering.
 <table style="padding:10px">
   <tr>
-    <td>Default Counter</td>
-    <td>Arbitrary Order Execution</td>
+    <td>Default Counter <a href="https://github.com/SpinalHDL/SpinalCrypto/blob/master/crypto/src/main/scala/spinal/crypto/symmetric/aes/AESCore_Std.scala#L278-L294">[source]</a></td>
+    <td>Arbitrary Order Execution <a href="https://github.com/jens-na/SpinalCrypto/blob/0b2f93c881e4d43aee0ea4e6b160d3eb0ba434ae/crypto/src/main/scala/spinal/crypto/symmetric/aes/AESCore_Std.scala#L278-L303">[source]</a></td>
+  </tr>
   <tr>
     <td><img alt="counter default" src="https://i.imgur.com/JT4qFTu.png"></img></td>
     <td><img alt="counter arbitrary order" src="https://i.imgur.com/1k83nwH.png"></img></td>
