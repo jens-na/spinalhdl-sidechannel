@@ -41,9 +41,11 @@ object CounterExtensions {
     val c2 = HidingCounter(start, end) // active when bufferToggle == true
     val bufferToggle = Reg(Bool) init(False)
 
+
     val overrides = List[Data](valueNext, willOverflowIfInc, willOverflow, willIncrement, willClear)
     overrides.foreach(x => x.allowOverride)
 
+    val ready = Mux(bufferToggle, c2.ready, c1.ready)
     valueNext := Mux(bufferToggle, c2.valueNext, c1.valueNext)
     willIncrement := Mux(bufferToggle, c2.willIncrement, c1.willIncrement)
     willOverflowIfInc := Mux(bufferToggle, c2.willOverflowIfInc, c1.willOverflowIfInc)
