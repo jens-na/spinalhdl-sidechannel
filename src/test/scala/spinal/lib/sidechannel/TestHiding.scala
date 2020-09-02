@@ -25,7 +25,7 @@ package spinal.lib.sidechannel
 import spinal.core.{assert, _}
 import spinal.core.sim._
 import spinal.lib._
-import spinal.lib.sidechannel.HideMethods._
+import spinal.lib.sidechannel.CounterExtensions._
 import org.scalatest.FunSuite
 
 import scala.collection.mutable.ListBuffer

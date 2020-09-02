@@ -28,7 +28,7 @@ import spinal.core.sim._
 
 import scala.collection.mutable.ListBuffer
 
-object HideMethods {
+object CounterExtensions {
 
   /**
    * Hiding counter with double buffer functionality. The buffer includes two sub counters which change when the other
@@ -140,7 +140,7 @@ object HideMethods {
     }
   }
 
-  implicit class HidingCounterExtension[T <: Counter](val c: T) {
+  implicit class CounterExtension[T <: Counter](val c: T) {
 
     /**
      * Puts the Counter in the arbitrary order state
@@ -188,5 +188,4 @@ object HideMethods {
       c
     }
   }
-
 }
