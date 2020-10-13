@@ -296,9 +296,23 @@ class MaskedN[T <: Data](val dataType: HardType[T], numShares: Int) extends Mult
 
   override def &(right: MaskedN[T]): MaskedN[T] = {
     val obj = weakClone
-    val shares = (right.share).zip(this.share).map(t => t._1.asBits & t._2.asBits)
-    obj.assignFrom((false, shares))
-    obj
+    val shares = Vec(dataType(), numShares)
+    numShares match {
+      case 2 => {
+        // https://eprint.iacr.org/2018/1007.pdf page 7
+        val a0 = share(0).asBits keep()
+        val a1 = share(1).asBits keep()
+        val b0 = right.share(0).asBits keep()
+        val b1 = right.share(1).asBits keep()
+
+        shares(0).assignFromBits((a0 & b0 ^ (a0 & b1 ^ b1)) ^ ((a1 & b0 ^ (a1 & b1 ^ b1)) ^ a1))
+        shares(1).assignFromBits(a1)
+
+        obj.assignFrom((false, shares))
+        obj
+      }
+      case _ => this /* TODO for 3+ shares */
+    }
   }
 
   override def |(right: MaskedN[T]): MaskedN[T] = this // TODO

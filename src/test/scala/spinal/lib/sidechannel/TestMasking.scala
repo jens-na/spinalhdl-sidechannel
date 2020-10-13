@@ -49,24 +49,15 @@ case class TestMasking() extends FunSuite {
       q1 := (B("01101010"), B("11111001"))
       q2 := q0 ^ q1
 
-      val q3 = Masked3(Bits(8 bits)) keep()
-      val q4 = Masked3(Bits(8 bits)) keep()
-      val q5 = Masked3(Bits(8 bits)) keep()
+      val qa = Masked2(Bits(8 bits)) keep()
+      val qb = Masked2(Bits(8 bits)) keep()
+      val qc = Masked2(Bits(8 bits)) keep()
+      qa := (counter.asBits.resize(8), B("01010111"))
+      qb := (B("01101010"), B("11111001"))
+      qc := qa & qb
 
-      q3 := (counter.asBits.resize(8), B("01010111"), B("11000001"))
-      q4 := (B("01101010"), B("11111001"), B("11111001"))
-      q5 := q3 ^ q4
 
-
-      val q6 = MaskedN(Bits(8 bits), 5) keep()
-      val q7 = MaskedN(Bits(8 bits), 5) keep()
-      val q8 = MaskedN(Bits(8 bits), 5) keep()
-
-      q6 := (counter.asBits.resize(8), B("01010111"), B("11000001"), B("11000001"), B("11000001"))
-      q7 := (B("01101010"), B("11111001"), B("11111001"), B("11000001"), B("11000001"))
-      q8 := q6 ^ q7
-
-      io.result := q2.asUnmaskedBits
+      io.result := qc.asUnmaskedBits
       counter.increment()
     }
 
