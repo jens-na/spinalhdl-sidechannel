@@ -22,13 +22,22 @@
  */
 package spinal.lib.sidechannel
 
-import spinal.core.{Bits, _}
+import spinal.core._
 import spinal.lib._
 import spinal.core.sim._
 
-import scala.collection.mutable.ListBuffer
-
 object CounterExtensions {
+
+  case class PrngSeed(width: Int) extends Bundle with IMasterSlave {
+    val valid = Bool
+    val ready = Bool
+    val payload = Bits(width bits)
+
+    override def asMaster(): Unit = {
+      out(valid, payload)
+      in(ready)
+    }
+  }
 
   /**
    * Hiding counter with double buffer functionality. The buffer includes two sub counters which change when the other
@@ -63,11 +72,6 @@ object CounterExtensions {
       when(bufferToggle) {c2.increment()}
       when(!bufferToggle) {c1.increment()}
     }
-
-    def setSeed(seed : Seq[Bits]): Unit = {
-      c1.Shuffle.seed := seed(0)
-      c2.Shuffle.seed := seed(1)
-    }
   }
 
   /**
@@ -88,6 +92,18 @@ object CounterExtensions {
     val overrides = List[Data](valueNext, willOverflowIfInc)
     overrides.foreach(x => x.allowOverride)
 
+    val Seed = new Area {
+      val fifo = StreamFifo(Bits(64 bits), 16)
+      val popPort = master Stream (Bits(64 bit))
+
+      fifo.io.pop >/-> popPort
+      fifo.io.pop.valid := willOverflowIfInc
+      // in toplevel:
+      // val pushPort = slave Stream (Bits(64 bit))
+      // fifo.io.push << io.slavePort
+
+    }
+
     /**
      * Shuffle implementation
      * Knuth, Donald E., The Art of Computer Programming, Volume 2: Seminumerical Algorithms, 3d edition
@@ -96,10 +112,9 @@ object CounterExtensions {
     val Shuffle = new Area {
       val rnd = Bits(64 bits)
       val rndShift = Bits(width bits)
-      val seed = Bits(64 bits) randBoot()
-
       val prng = new XorShift64()
-      prng.io.seed := seed
+
+      prng.io.seed := 0 // TODO
       rndShift := rnd >> (64 - width)
       rnd := prng.io.rngout
 
@@ -137,9 +152,6 @@ object CounterExtensions {
       }
     }
 
-    def setSeed(seed : Seq[Bits]): Unit = {
-      Shuffle.seed := seed(0)
-    }
   }
 
   implicit class CounterExtension[T <: Counter](val c: T) {
@@ -164,30 +176,6 @@ object CounterExtensions {
       if(!enabled) return c
       require(isPow2(c.end - c.start + 1), "Hiding extension counter must be a power of 2. Requirement: isPow2(end - start)")
       HidingCounterDoubleBuffer(c.start, c.end)
-    }
-
-    /**
-     * Sets the seed of the hiding counter. If the counter is no hiding counter, nothing happens.
-     *
-     * @param seed
-     * @return
-     */
-    def withSeed(seed : Bits*): Counter = {
-      try {
-        if (c.isInstanceOf[HidingCounter]) {
-          val hc = c.asInstanceOf[HidingCounter]
-          hc.setSeed(seed)
-          hc
-        }
-        if(c.isInstanceOf[HidingCounterDoubleBuffer]) {
-          val hc = c.asInstanceOf[HidingCounterDoubleBuffer]
-          hc.setSeed(seed)
-          hc
-        }
-      } catch {
-        case e: ClassCastException => c
-      }
-      c
     }
   }
 }

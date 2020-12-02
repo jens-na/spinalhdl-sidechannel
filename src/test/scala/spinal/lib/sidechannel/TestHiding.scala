@@ -22,7 +22,7 @@
  */
 package spinal.lib.sidechannel
 
-import spinal.core.{assert, _}
+import spinal.core._
 import spinal.core.sim._
 import spinal.lib._
 import spinal.lib.sidechannel.CounterExtensions._
@@ -43,11 +43,11 @@ case class HidingTestSuite() extends FunSuite {
     class HidingCounter_16_Single(counterLength: Int) extends Component {
       val io = new Bundle {
         val value = out UInt (log2Up(counterLength) bits)
-        val seed = in Bits (64 bits)
+        val seedPushPort = slave Stream(Bits(64 bits))
       }
 
       val counter = Counter(counterLength) arbitraryOrder()
-      counter.asInstanceOf[HidingCounter].Shuffle.seed := io.seed // Set a seed from a TRNG for example
+      counter.asInstanceOf[HidingCounter].Seed.fifo.io.push << io.seedPushPort
 
       when(counter.willOverflow) {
         counter.clear()
@@ -68,8 +68,14 @@ case class HidingTestSuite() extends FunSuite {
       dut.clockDomain.forkStimulus(10)
       dut.clockDomain.waitRisingEdge()
 
-      dut.io.seed #= seed // Static seed for testing
       val counterImpl = dut.counter.asInstanceOf[HidingCounter]
+
+      for (j <- 0 until 16) {
+        dut.io.seedPushPort.valid := True
+        dut.io.seedPushPort.payload := j
+      }
+      dut.io.seedPushPort.valid := False
+
 
       // Wait until seeded
       waitUntil(counterImpl.ready.toBoolean == true)
@@ -103,8 +109,8 @@ case class HidingTestSuite() extends FunSuite {
       }
 
       val counter = Counter(counterLength) arbitraryOrderDoubleBuffer()
-      counter.asInstanceOf[HidingCounterDoubleBuffer].c1.Shuffle.seed := io.seed1 // Set a seed from a TRNG for example
-      counter.asInstanceOf[HidingCounterDoubleBuffer].c2.Shuffle.seed := io.seed2
+//      counter.asInstanceOf[HidingCounterDoubleBuffer].c1.Shuffle.seed := io.seed1 // Set a seed from a TRNG for example
+//      counter.asInstanceOf[HidingCounterDoubleBuffer].c2.Shuffle.seed := io.seed2
 
       when(counter.willOverflow) {
         counter.clear()
