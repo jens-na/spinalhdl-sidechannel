@@ -1,6 +1,6 @@
 name := "spinalhdl-sidechannel"
 organization := "com.github.spinalhdl"
-version := "0.1"
+version := "0.2"
 scalaVersion := "2.11.12"
 
 lazy val externalLibs = project in file("lib")

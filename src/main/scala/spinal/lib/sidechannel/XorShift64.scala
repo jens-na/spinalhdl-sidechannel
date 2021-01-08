@@ -35,7 +35,7 @@ class XorShift64 extends Component {
   val rng = Reg(Bits(64 bits)) init(io.seed)
 
   rng1:= io.rngout ^ (io.rngout |<< 21)
-  rng2 := rng1 ^ (rng1 |<< 35)
+  rng2 := rng1 ^ (rng1 |>> 35)
   rng3:= rng2 ^ (rng2 |<< 4)
 
   rnglast := io.rngout

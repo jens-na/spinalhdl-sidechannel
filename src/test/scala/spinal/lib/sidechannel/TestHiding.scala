@@ -46,15 +46,15 @@ case class HidingTestSuite() extends FunSuite {
         val seedPushPort = slave Stream(Bits(64 bits))
       }
 
-      val counter = Counter(counterLength) arbitraryOrder()
-      counter.asInstanceOf[HidingCounter].Seed.fifo.io.push << io.seedPushPort
-
-      when(counter.willOverflow) {
-        counter.clear()
-      }
-
-      counter.increment()
-      io.value := counter.value
+//      val counter = Counter(counterLength) arbitraryOrder()
+//      counter.asInstanceOf[HidingCounter].Seed.fifo.io.push << io.seedPushPort
+//
+//      when(counter.willOverflow) {
+//        counter.clear()
+//      }
+//
+//      counter.increment()
+//      io.value := counter.value
     }
 
     // Variables
@@ -68,7 +68,7 @@ case class HidingTestSuite() extends FunSuite {
       dut.clockDomain.forkStimulus(10)
       dut.clockDomain.waitRisingEdge()
 
-      val counterImpl = dut.counter.asInstanceOf[HidingCounter]
+//      val counterImpl = dut.counter.asInstanceOf[HidingCounter]
 
       for (j <- 0 until 16) {
         dut.io.seedPushPort.valid := True
@@ -78,12 +78,12 @@ case class HidingTestSuite() extends FunSuite {
 
 
       // Wait until seeded
-      waitUntil(counterImpl.ready.toBoolean == true)
+//      waitUntil(counterImpl.ready.toBoolean == true)
       dut.clockDomain.waitRisingEdge()
 
       // Check the counterLength values
       for (j <- 0 until counterLength) {
-        println(s"value=${dut.io.value.toBigInt.toString(16)}, ready=${counterImpl.ready.toBoolean}")
+//        println(s"value=${dut.io.value.toBigInt.toString(16)}, ready=${counterImpl.ready.toBoolean}")
         actual += dut.io.value.toBigInt
         dut.clockDomain.waitRisingEdge()
       }
@@ -94,6 +94,22 @@ case class HidingTestSuite() extends FunSuite {
 
       for (n <- expected) {
         spinal.core.assert(actual.contains(n), s"Value '${n.toString(16)}' not in the actual values list: [${actual.toString()}]")
+      }
+    }
+  }
+
+  test(testName = "tests") {
+    class SampleTest(size: Int) extends Component {
+      val io = new Bundle {
+        val x = in UInt(size bits)
+        val y = out Bool
+      }
+      val r = Reg(UInt(size bits))
+
+      when(io.x > 5) {
+        r := r + 1
+      }.otherwise {
+        r := r - 1
       }
     }
   }

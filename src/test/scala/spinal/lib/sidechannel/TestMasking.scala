@@ -41,6 +41,23 @@ case class TestMasking() extends FunSuite {
       }
       val counter = Counter(4)
 
+     // val areaTest = Reg(new AreaTest()) // does not work!
+
+
+      //val testnewbits = new TestNewBits()
+      //testnewbits := B("001")
+      //testnewbits </> B("000")
+
+//      val q8 = Reg(Masked2(Bits(8 bits))) init(B(0), B(0))
+//
+//      val q9 = Masked2(Bits(8 bits))
+//      q9 := (B("00001111"), B("11111110"))
+//
+//      when(counter.willOverflow) {
+//        q8 := q8 ^ q9
+//      }
+//      counter.increment()
+
       val q0 = Masked2(Bits(8 bits)) keep()
       val q1 = Masked2(Bits(8 bits)) keep()
       val q2 = Masked2(Bits(8 bits)) keep()
@@ -48,6 +65,8 @@ case class TestMasking() extends FunSuite {
       q0 := (counter.asBits.resize(8), B("01010111"))
       q1 := (B("01101010"), B("11111001"))
       q2 := q0 ^ q1
+
+      val qx = new MaskedN(Bits(8 bits), 2) keep()
 
       val qa = Masked2(Bits(8 bits)) keep()
       val qb = Masked2(Bits(8 bits)) keep()
@@ -58,11 +77,77 @@ case class TestMasking() extends FunSuite {
 
 
       io.result := qc.asUnmaskedBits
+//      io.result := q8.asUnmaskedBits
+//      io.result := q0.asUnmaskedBits
       counter.increment()
     }
 
     val cfg = SimConfig.withConfig(new SpinalConfig(verbose = true))
     cfg.withWave.compile(new TestMasking_Simple()).doSim { dut =>
+      dut.clockDomain.forkStimulus(10)
+
+      for (j <- 0 until 50) {
+        dut.clockDomain.waitRisingEdge()
+      }
+    }
+  }
+
+  test("TestMasking_Simple_2") {
+
+    class TestMasking_Simple_2 extends Component {
+
+      val io = new Bundle {
+        val result = out Bits(8 bits)
+      }
+      val counter = Counter(4)
+
+      // val areaTest = Reg(new AreaTest()) // does not work!
+
+
+      //val testnewbits = new TestNewBits()
+      //testnewbits := B("001")
+      //testnewbits </> B("000")
+
+      //      val q8 = Reg(Masked2(Bits(8 bits))) init(B(0), B(0))
+      //
+      //      val q9 = Masked2(Bits(8 bits))
+      //      q9 := (B("00001111"), B("11111110"))
+      //
+      //      when(counter.willOverflow) {
+      //        q8 := q8 ^ q9
+      //      }
+      //      counter.increment()
+
+      val q0 = Reg(Masked2(Bits(8 bits))) keep()
+      val q1 = Reg(Masked2(Bits(8 bits))) keep()
+      val q2 = Reg(Masked2(Bits(8 bits))) keep()
+
+      q0 := (counter.asBits.resize(8), B("01010111"))
+      q1 := (B("01101010"), B("11111001"))
+      q2 := q0 ^ q1
+
+      val qx = new MaskedN(Bits(8 bits), 2) keep()
+
+      val qa = Masked2(Bits(8 bits))keep()
+      val qb = Masked2(Bits(8 bits)) keep()
+      val qc = Masked2(Bits(8 bits)) keep()
+      val qd = Masked2(Bits(8 bits)) keep()
+      qa := (counter.asBits.resize(8), B("01010111"))
+      qb := (B("01101010"), B("11111001"))
+      qc := qa & qb
+      qd := qa ^ qb
+
+
+
+
+      io.result := qc.asUnmaskedBits
+      //      io.result := q8.asUnmaskedBits
+      //      io.result := q0.asUnmaskedBits
+      counter.increment()
+    }
+
+    val cfg = SimConfig.withConfig(new SpinalConfig(verbose = true))
+    cfg.withWave.compile(new TestMasking_Simple_2()).doSim { dut =>
       dut.clockDomain.forkStimulus(10)
 
       for (j <- 0 until 50) {

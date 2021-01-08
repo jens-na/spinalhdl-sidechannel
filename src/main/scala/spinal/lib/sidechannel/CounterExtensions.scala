@@ -80,79 +80,96 @@ object CounterExtensions {
    * @param start the start value of the counter
    * @param end the end value of the counter
    */
-  case class HidingCounter(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
-    val ready = Reg(Bool()) init(False) simPublic()
-    val width = log2Up(end - start + 1)
-    val currShuffleInit = Reg(UInt(width bits)) init(start)
-    val currShufflePop = Reg(UInt(width bits)) init(start)
+//  case class HidingCounter2(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
+//    val ready = Reg(Bool()) init(False) simPublic()
+//    val width = log2Up(end - start + 1)
+//    val currShuffleInit = Reg(UInt(width bits)) init(start)
+//    val currShufflePop = Reg(UInt(width bits)) init(start)
+//
+//    val numbers = Vec(Reg(UInt(width bits)), (end + 1).toInt)
+//    ((start to end), numbers).zipped.foreach((x,y) => y init(x))
+//
+//    val overrides = List[Data](valueNext, willOverflowIfInc)
+//    overrides.foreach(x => x.allowOverride)
+//
+//    val Seed = new Area {
+//      val fifo = StreamFifo(Bits(64 bits), 16)
+//      val popPort = master Stream (Bits(64 bit))
+//
+//      fifo.io.pop >/-> popPort
+//      fifo.io.pop.valid := willOverflowIfInc
+//      // in toplevel:
+//      // val pushPort = slave Stream (Bits(64 bit))
+//      // fifo.io.push << io.slavePort
+//
+//    }
 
-    val numbers = Vec(Reg(UInt(width bits)), (end + 1).toInt)
-    ((start to end), numbers).zipped.foreach((x,y) => y init(x))
+    case class HidingCounter(override val start: BigInt, override val end: BigInt) extends Counter(start, end) {
+      val ready = Reg(Bool()) init(False) simPublic()
+      val width = log2Up(end - start + 1)
+      val currShuffleInit = Reg(UInt(width bits)) init(start)
+      val currShufflePop = Reg(UInt(width bits)) init(start)
 
-    val overrides = List[Data](valueNext, willOverflowIfInc)
-    overrides.foreach(x => x.allowOverride)
+      val numbers = Vec(Reg(UInt(width bits)), (end + 1).toInt)
+      ((start to end), numbers).zipped.foreach((x,y) => y init(x))
 
-    val Seed = new Area {
-      val fifo = StreamFifo(Bits(64 bits), 16)
-      val popPort = master Stream (Bits(64 bit))
+      val overrides = List[Data](valueNext, willOverflowIfInc)
+      overrides.foreach(x => x.allowOverride)
 
-      fifo.io.pop >/-> popPort
-      fifo.io.pop.valid := willOverflowIfInc
-      // in toplevel:
-      // val pushPort = slave Stream (Bits(64 bit))
-      // fifo.io.push << io.slavePort
+      /**
+       * Shuffle implementation
+       * Knuth, Donald E., The Art of Computer Programming, Volume 2: Seminumerical Algorithms, 3d edition
+       * Algorithm P (Shuffling)
+       */
+      val Shuffle = new Area {
+        val rnd = Bits(64 bits)
+        val rndShift = Bits(width bits)
+        val seed = Bits(64 bits) randBoot()
 
-    }
+        val prng = new XorShift64()
+        prng.io.seed := seed
+        rndShift := (U(rnd) % U(end - start + 1)).asBits.resized
+        //val rndshifttest = (U(rnd) % U(end - start + 1)).asBits keep()
+        rnd := prng.io.rngout
 
-    /**
-     * Shuffle implementation
-     * Knuth, Donald E., The Art of Computer Programming, Volume 2: Seminumerical Algorithms, 3d edition
-     * Algorithm P (Shuffling)
-     */
-    val Shuffle = new Area {
-      val rnd = Bits(64 bits)
-      val rndShift = Bits(width bits)
-      val prng = new XorShift64()
+        // Swap
+        val tmp = numbers(rndShift.asUInt)
+        when(!ready) {
+          numbers(rndShift.asUInt) := numbers(currShuffleInit)
+          numbers(currShuffleInit) := tmp
+          currShuffleInit := currShuffleInit + 1
 
-      prng.io.seed := 0 // TODO
-      rndShift := rnd >> (64 - width)
-      rnd := prng.io.rngout
-
-      // Swap
-      val tmp = numbers(rndShift.asUInt)
-      when(!ready) {
-        numbers(rndShift.asUInt) := numbers(currShuffleInit)
-        numbers(currShuffleInit) := tmp
-        currShuffleInit := currShuffleInit + 1
-
-        when(currShuffleInit === (end - 1)) {
-          ready := True
+          when(currShuffleInit === (end - 1)) {
+            ready := True
+          }
         }
       }
-    }
 
-    // Increment + direct forward iff the last random would change numbers(0)
-    when(currShuffleInit === (end - 1) && Shuffle.rndShift.asUInt === 0) {
-      valueNext := numbers(currShuffleInit)
-    }.otherwise {
-      valueNext := Mux(willIncrement, numbers(currShufflePop + 1), numbers(0))
-    }
-    willOverflowIfInc := currShufflePop === end
+      // Increment + direct forward iff the last random would change numbers(0)
+      when(currShuffleInit === (end - 1) && Shuffle.rndShift.asUInt === 0) {
+        valueNext := numbers(currShuffleInit)
+      }.otherwise {
+        valueNext := Mux(willIncrement, numbers(currShufflePop + 1), numbers(0))
+      }
+      willOverflowIfInc := currShufflePop === end
 
-    when(willClear) {
-      ready := False
-      currShuffleInit := start
-      currShufflePop := start
-    }
+      when(willClear) {
+        ready := False
+        currShuffleInit := start
+        currShufflePop := start
+      }
 
-    override def increment(): Unit = {
-      when(ready){
-        currShufflePop := currShufflePop + 1
-        willIncrement := True
+      override def increment(): Unit = {
+        when(ready){
+          currShufflePop := currShufflePop + 1
+          willIncrement := True
+        }
+      }
+
+      def setSeed(seed : Seq[Bits]): Unit = {
+        Shuffle.seed := seed(0)
       }
     }
-
-  }
 
   implicit class CounterExtension[T <: Counter](val c: T) {
 

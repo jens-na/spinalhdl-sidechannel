@@ -50,6 +50,13 @@ import scala.collection.mutable.ArrayBuffer
 ////    override def getFactory: (BigInt, Int, MaskedBits2) => MaskedBits2 = ???
 ////}
 //
+
+//class TestNewBits extends Bits {
+//  def </>(right: Bits): Unit = {
+//
+//  }
+//}
+//
 //class MaskedBits2 extends BaseType with BitwiseOp[MaskedBits2] with Widthable {
 //  private[spinal] def _data: (Bits, Bits) = (Bits, Bits)
 //  type T = (Bits, Bits)
@@ -106,6 +113,14 @@ import scala.collection.mutable.ArrayBuffer
 //  override def isEquals(that: Any): Bool = False
 //  override def isNotEquals(that: Any): Bool = False
 //  override def calcWidth : Int = 0
+//}
+//
+//class AreaTest extends ImplicitArea[UInt] {
+//  type T = UInt
+//
+//  override def implicitValue: T = U(2)
+//
+//  override type RefOwnerType = this.type
 //}
 
 //object MaskedBits2 {
@@ -286,6 +301,10 @@ class MaskedN[T <: Data](val dataType: HardType[T], numShares: Int) extends Mult
         this.share := x.share
       }
     }
+  }
+
+  def init(that: T*): Unit = {
+
   }
 
   override def elements: ArrayBuffer[(String, Data)] = {

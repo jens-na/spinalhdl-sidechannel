@@ -46,6 +46,10 @@ object DummyOpsFsm {
     val prngseed = Reg(Bits(bitWidthSeed))
     val n = Reg(UInt(bitWidthRnd)) // rnd
     val k = Reg(UInt(bitWidthRnd)) // totalOps - n
+    val endCond = Reg(Bool) init(False)
+    val startCond = Reg(Bool) init(False)
+    val ndelay = UInt(bitWidthRnd)
+    ndelay := Mux(prngtemp === 0, U(totalOps - 1), (prngtemp - 1))
 
     // FSM
     val internalFsm =  new StateMachine {
@@ -67,6 +71,8 @@ object DummyOpsFsm {
       // Set random number n and k = totalOps - n
       // If the random number is 0, set n = 15 and k = 0. Probably causes a bias.
       val setRandom: State = new State {
+
+
         whenIsActive{
           when(prngtemp === 0) {
             n := totalOps - 1
@@ -80,19 +86,26 @@ object DummyOpsFsm {
       }
 
       // Delay n cycles and afterwards perform the component block
-      val dummyOpsBefore : State = new StateDelay(n){
-        whenCompleted(goto(performBlock))
+      val dummyOpsBefore : State = new StateDelay(ndelay){
+        whenCompleted {
+            goto(performBlock)
+
+        }
       }
 
       val performBlock : State = new State {
+
         whenIsActive {
-          this
-          goto(dummyOpsAfter)
+          startCond := True
+          when(endCond) {
+            startCond := False
+            goto(dummyOpsAfter)
+          }
         }
       }
 
       // Delay k cycles and afterwards go to initial state again
-      val dummyOpsAfter : State = new StateDelay(k){
+      val dummyOpsAfter : State = new StateDelay(k) {
         whenCompleted(goto(obtainRandom))
       }
     }
